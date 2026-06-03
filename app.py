@@ -123,7 +123,7 @@ def index():
 @app.route('/group/<string:group_id>')
 def view_group(group_id):
 	conn = get_db()
-	groups = conn.execute("SELECT * FROM groups").fetchall()
+	groups = conn.execute("SELECT * FROM groups WHERE id = ?", (group_id,)).fetchone()
 	
 	active_group, members, expenses, settlements, balances, simplified_debts = get_group_details(group_id)
 	if not active_group:
