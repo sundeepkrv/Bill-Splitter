@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Bill Splitter by SR</title>
+	<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='logo.png') }}">
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = { darkMode: 'class' }
+	</script>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans min-h-screen pb-16 flex flex-col transition-colors duration-200" onload="calculatePayerAutoSplits(); initTheme();">
+	<header class="w-full sticky top-0 h-auto md:h-24 bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 text-white shadow-xl px-6 py-4 md:py-0 flex items-center justify-center z-50">
+		<div class="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12 w-full max-w-5xl">
+			<a href="{{ url_for('index') }}" class="flex items-center gap-3 group text-center md:text-left">
+				<img src="{{ url_for('static', filename='logo.png') }}" alt="Bill Splitter Logo" class="h-12 w-12 object-contain drop-shadow-md">
+				<div class="space-y-0.5">
+					<h1 class="text-2xl font-black tracking-wider drop-shadow-md group-hover:text-indigo-100 transition-colors">Bill Splitter</h1>
+					<p class="text-xs font-medium text-indigo-100 opacity-90 max-w-xs sm:max-w-none">Easily split bills and track shared expenses with your friends</p>
+				</div>
+			</a>
+			<div class="flex flex-wrap items-center justify-center gap-3">
+				<a href="{{ url_for('index') }}" class="bg-white/15 hover:bg-white/25 backdrop-blur border border-white/20 text-white px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1"><span>🏠</span></a>
+				<button onclick="toggleTheme()" class="bg-white/15 hover:bg-white/25 backdrop-blur border border-white/20 text-white px-2.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1"><span id="theme-icon">☀️</span></button>
+				
+				{% if active_group %}
+				<button onclick="copyShareLink('{{ active_group.id }}')" class="bg-emerald-500 hover:bg-emerald-400 text-white text-xs px-3 py-2 rounded-xl font-bold transition-all shadow-sm whitespace-nowrap">🔗 Share Group</button>
+				{% endif %}
+			</div>
+		</div>
+	</header>
+
+	<main class="max-w-7xl w-full mx-auto my-auto p-6 grid grid-cols-1 md:grid-cols-4 gap-6 flex-grow">
+		<aside class="md:col-span-1 space-y-6 sticky top-28 max-h-[calc(100vh-24rem)]">
+			<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+				<h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Create New Group</h3>
+				<form action="{{ url_for('add_group') }}" method="POST" class="space-y-2">
+					<input type="text" name="name" placeholder="e.g., Roommates, Trip to Goa" required class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 dark:text-white">
+					<button type="submit" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white text-sm py-2 px-4 rounded-xl font-medium">Create Group</button>
+				</form>
+			</div>
+			{% if groups %}
+			<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
+				<h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Your Groups</h3>
+				<ul class="space-y-1">
+					{% for g in groups %}
+					<li>
+						<a href="{{ url_for('view_group', group_id=g.id) }}" class="block w-full text-left px-3 py-2 rounded-xl text-sm {% if active_group and active_group.id == g.id %} bg-cyan-50 border border-cyan-200 text-cyan-600 dark:bg-cyan-950 dark:border-cyan-800 dark:text-cyan-400 {% else %} text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-900 {% endif %}">📁 {{ g.name }}</a>
+					</li>
+					{% endfor %}
+				</ul>
+			</div>
+			{% endif %}
+		</aside>
+		<div class="md:col-span-3 space-y-6">
+			{% with messages = get_flashed_messages(with_categories=true) %}
+				{% if messages %}
+					{% for category, msg in messages %}
+					<div class="p-4 rounded-xl border text-sm font-medium {% if category == 'success' %} bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 {% else %} bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 {% endif %}">
+						{{ msg }}
+					</div>
+					{% endfor %}
+				{% endif %}
+			{% endwith %}
+			{% if not active_group %}
+			<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-12 text-center max-w-xl mx-auto mt-12 shadow-sm">
+				<div class="text-5xl mb-4">✨</div>
+				<h2 class="text-2xl font-black mb-2">Welcome!</h2>
+				<p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Select an existing group from the sidebar, or create a new one to start splitting bills.</p>
+			</div>
+			{% else %}
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				<div class="lg:col-span-2 space-y-6">
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Edit Group Name</h2>
+						<form action="{{ url_for('rename_group', group_id=active_group.id) }}" method="POST" class="flex gap-2">
+							<input type="text" name="new_group_name" value="{{ active_group.name }}" required class="flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-sm font-bold text-slate-800 dark:text-white focus:outline-none">
+							<button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs px-4 rounded-xl font-bold">Rename Group</button>
+						</form>
+					</div>
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">1. Group Members</h2>
+						<form action="{{ url_for('add_member', group_id=active_group.id) }}" method="POST" class="flex gap-2 mb-4">
+							<input type="text" name="name" placeholder="Enter person's name" required class="flex-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm dark:text-white focus:outline-none">
+							<button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 rounded-xl font-semibold">Add Member</button>
+						</form>
+						<div class="space-y-2">
+							{% for m in members %}
+							<form action="{{ url_for('edit_member', group_id=active_group.id, member_id=m.id) }}" method="POST" class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+								<span class="text-xs text-slate-400 pl-1">👤</span>
+								<input type="text" name="new_name" value="{{ m.name }}" class="bg-transparent border-0 focus:bg-white dark:focus:bg-slate-950 px-2 py-0.5 rounded text-sm font-medium text-slate-800 dark:text-slate-200 flex-1 focus:outline-none">
+								<button type="submit" class="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline px-2">Edit Name</button>
+							</form>
+							{% endfor %}
+						</div>
+					</div>
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<div class="flex items-center justify-between mb-4">
+							<h2 class="text-lg font-bold text-slate-800 dark:text-slate-200" id="form-title">2. Add New Expense</h2>
+							<button onclick="resetExpenseForm()" id="cancel-edit-btn" class="hidden text-xs text-rose-600 border border-rose-200 bg-rose-50 dark:text-rose-400 dark:border-rose-900/30 dark:bg-rose-950/20 px-2 py-1 rounded">Cancel Edit</button>
+						</div>
+						<form id="expense-main-form" action="{{ url_for('process_expense', group_id=active_group.id) }}" method="POST" class="space-y-4">
+							<input type="hidden" name="expense_id" id="form_expense_id" value="">
+							<div class="grid grid-cols-2 gap-4">
+								<div>
+									<label class="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold mb-1">Expense Description</label>
+									<input type="text" name="description" id="form_description" placeholder="Dinner, Taxi, Rent" required class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm focus:border-cyan-500 dark:text-white focus:outline-none">
+								</div>
+								<div>
+									<label class="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold mb-1">Total Amount (₹)</label>
+									<input type="number" name="total_amount" id="form_total_amount" min="1" placeholder="0" oninput="calculatePayerAutoSplits()" required class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm focus:border-cyan-500 dark:text-white focus:outline-none">
+								</div>
+							</div>
+							<div class="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-4 rounded-xl">
+								<label class="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold mb-2">Paid By (Check all who paid)</label>
+								<div class="space-y-2">
+									{% for m in members %}
+									<div class="flex items-center justify-between gap-2 max-w-sm">
+										<label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+											<input type="checkbox" name="payer_checked_{{ m.name }}" id="payer_chk_{{ m.name }}" onchange="calculatePayerAutoSplits()" class="rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-cyan-500 focus:ring-0">
+											<span>{{ m.name }}</span>
+										</label>
+										<input type="text" name="payer_amount_{{ m.name }}" id="payer_amt_{{ m.name }}" readonly placeholder="₹ 0" class="w-28 bg-slate-200/50 text-slate-600 dark:bg-slate-950/80 dark:text-slate-400 border border-slate-200 dark:border-slate-800/60 rounded-lg px-2 py-0.5 text-xs text-right cursor-not-allowed font-mono">
+									</div>
+									{% endfor %}
+								</div>
+							</div>
+							<div>
+								<label class="block text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold mb-1.5">How to Split</label>
+								<select name="split_type" id="form_split_type" onchange="runSplitUIEngine()" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 dark:text-white">
+									<option value="EQUAL" selected>Split Equally</option>
+									<option value="UNEQUAL">Split by Custom Amounts</option>
+									<option value="PERCENT">Split by Percentages (%)</option>
+								</select>
+							</div>
+							<div id="sec_split_equal" class="bg-slate-50 dark:bg-slate-900/50 p-3 border border-slate-200 dark:border-slate-800 rounded-xl">
+								<label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Select who is sharing this expense:</label>
+								<div class="grid grid-cols-2 gap-2">
+									{% for m in members %}
+									<label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+										<input type="checkbox" name="sharers_equal" id="equal_share_chk_{{ m.name }}" value="{{ m.name }}" checked class="rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-cyan-600 focus:ring-0">
+										{{ m.name }}
+									</label>
+									{% endfor %}
+								</div>
+							</div>
+							<div id="sec_split_unequal" class="bg-slate-50 dark:bg-slate-900/50 p-3 border border-slate-200 dark:border-slate-800 rounded-xl hidden space-y-2">
+								<label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Enter custom share for each member (₹)</label>
+								{% for m in members %}
+								<div class="flex items-center justify-between max-w-xs text-xs">
+									<span>{{ m.name }}</span>
+									<input type="number" name="share_unequal_{{ m.name }}" id="unequal_share_val_{{ m.name }}" placeholder="₹ 0" class="w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-0.5 text-right dark:text-white focus:outline-none">
+								</div>
+								{% endfor %}
+							</div>
+							<div id="sec_split_percent" class="bg-slate-50 dark:bg-slate-900/50 p-3 border border-slate-200 dark:border-slate-800 rounded-xl hidden space-y-2">
+								<label class="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Enter shares in percent (Must total 100%)</label>
+								{% for m in members %}
+								<div class="flex items-center justify-between max-w-xs text-xs">
+									<span>{{ m.name }}</span>
+									<input type="number" name="share_pct_{{ m.name }}" id="pct_share_val_{{ m.name }}" placeholder="0%" class="w-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded px-2 py-0.5 text-right dark:text-white focus:outline-none">
+								</div>
+								{% endfor %}
+							</div>
+							<button type="submit" id="form-submit-btn" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white py-2.5 rounded-xl text-sm font-bold shadow-sm">Save Expense</button>
+						</form>
+					</div>
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Expense History</h2>
+						<div class="space-y-2">
+							{% for e in expenses %}
+							<div class="bg-slate-50 dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between gap-4">
+								<div>
+									<h4 class="font-bold text-slate-800 dark:text-slate-100 text-sm">💸 {{ e.description }}</h4>
+									<p class="text-xs text-slate-500 mt-0.5">Split type: {{ e.split_type | lower | capitalize }} | Total Bill: <span class="text-slate-700 dark:text-slate-300 font-mono font-bold">₹ {{ e.total_amount }}</span></p>
+								</div>
+								<div class="flex items-center gap-2">
+									<button onclick='initiateExpenseEdit({{ e|tojson|safe }})' class="text-xs bg-white border border-slate-200 dark:bg-slate-800 dark:border-slate-700 text-slate-800 dark:text-white hover:bg-slate-100 px-3 py-1.5 rounded-lg font-semibold">Edit</button>
+									<form action="{{ url_for('delete_expense', group_id=active_group.id, expense_id=e.id) }}" method="POST">
+										<button type="submit" class="text-xs bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/30 dark:border-rose-900/50 dark:text-rose-400 px-2 py-1.5 rounded-lg font-semibold">Delete</button>
+									</form>
+								</div>
+							</div>
+							{% else %}
+							<p class="text-xs text-slate-500 italic p-2">No expenses added to this group yet.</p>
+							{% endfor %}
+						</div>
+					</div>
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">🤝 Payments Made (Settlements)</h2>
+						<div class="space-y-2">
+							{% for s in settlements %}
+							<div class="bg-slate-50 dark:bg-slate-900/40 p-3.5 border border-slate-200 dark:border-slate-800/60 rounded-xl flex items-center justify-between gap-4">
+								<div class="text-sm text-slate-800 dark:text-slate-200">
+									<span class="text-emerald-600 dark:text-emerald-400 font-bold">✔ {{ s.payer }}</span> 
+									<span class="text-slate-500">paid</span> 
+									<span class="text-cyan-600 dark:text-cyan-400 font-bold">{{ s.receiver }}</span>
+								</div>
+								<div class="flex items-center gap-3">
+									<span class="font-mono text-sm font-bold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded">₹ {{ s.amount | int }}</span>
+									<form action="{{ url_for('delete_settlement', group_id=active_group.id, settlement_id=s.id) }}" method="POST">
+										<button type="submit" class="text-[10px] text-slate-500 hover:text-rose-500 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded">Undo</button>
+									</form>
+								</div>
+							</div>
+							{% else %}
+							<p class="text-xs text-slate-500 italic p-2">No settlement payments recorded yet.</p>
+							{% endfor %}
+						</div>
+					</div>
+				</div>
+				<div class="space-y-6">
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Current Balances</h2>
+						<div class="space-y-2">
+							{% for member, balance in balances.items() %}
+							<div class="flex items-center justify-between p-2.5 rounded-xl text-xs border {% if balance > 0 %} text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900 {% elif balance < 0 %} text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-400 dark:bg-rose-950/20 dark:border-rose-900 {% else %} text-slate-500 bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-800 {% endif %}">
+								<span class="font-medium">{{ member }}</span>
+								<span class="font-mono font-bold">{% if balance > 0 %}+₹ {{ balance }}{% elif balance < 0 %}-₹ {{ balance|abs }}{% else %}₹ 0{% endif %}</span>
+							</div>
+							{% endfor %}
+						</div>
+					</div>
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">How to Settle Up</h2>
+						<div class="space-y-2 mt-3">
+							{% for debt in simplified_debts %}
+							<div class="bg-slate-50 dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs flex items-center justify-between">
+								<span class="text-slate-700 dark:text-slate-300"><strong class="text-rose-500 font-bold">{{ debt.from }}</strong> owes <strong class="text-emerald-600 dark:text-emerald-400 font-bold">{{ debt.to }}</strong></span>
+								<span class="font-mono font-bold text-cyan-600 dark:text-cyan-400 bg-white dark:bg-slate-950 px-1.5 py-0.5 border border-slate-200 dark:border-slate-800 rounded">₹ {{ debt.amount }}</span>
+							</div>
+							{% else %}
+							<p class="text-xs text-emerald-600 dark:text-emerald-400 text-center italic">✨ Everyone is settled up!</p>
+							{% endfor %}
+						</div>
+					</div>
+					<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+						<h2 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Record a Payment</h2>
+						<form action="{{ url_for('manual_settle', group_id=active_group.id) }}" method="POST" class="space-y-2.5">
+							<div>
+								<label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Who Paid</label>
+								<select name="payer" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1.5 text-xs dark:text-slate-300 focus:outline-none">
+									{% for m in members %} <option value="{{ m.name }}">{{ m.name }}</option> {% endfor %}
+								</select>
+							</div>
+							<div>
+								<label class="block text-[10px] uppercase font-bold text-slate-400 mb-1">Who Received It</label>
+								<select name="receiver" class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1.5 text-xs dark:text-slate-300 focus:outline-none">
+									{% for m in members %} <option value="{{ m.name }}">{{ m.name }}</option> {% endfor %}
+								</select>
+							</div>
+							<div class="relative">
+								<span class="absolute left-2.5 top-1.5 text-xs text-slate-400 font-mono">₹</span>
+								<input type="number" name="amount" placeholder="Amount" required class="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg pl-6 pr-2 py-1.5 text-xs dark:text-white focus:outline-none">
+							</div>
+							<button type="submit" class="w-full bg-emerald-600 text-white font-bold text-xs py-2 rounded-lg hover:opacity-90">Save Payment</button>
+						</form>
+					</div>
+				</div>
+			</div>
+			{% endif %}
+		</div>
+	</main>
+	<footer class="w-full fixed bottom-0 left-0 bg-slate-900 text-slate-400 dark:bg-slate-950 dark:text-slate-500 text-center py-2 text-xs font-mono border-t border-slate-800 z-50 shadow-inner">
+		Developed by SR using Python-Flask ❤️
+	</footer>
+	<script>
+		function initTheme() {
+			if (localStorage.getItem('theme') === 'dark') {
+				document.documentElement.classList.add('dark');
+				document.getElementById('theme-icon').innerText = "🌙";
+			} else {
+				document.documentElement.classList.remove('dark');
+				document.getElementById('theme-icon').innerText = "☀️";
+			}
+		}
+		function toggleTheme() {
+			if (document.documentElement.classList.contains('dark')) {
+				document.documentElement.classList.remove('dark');
+				localStorage.setItem('theme', 'light');
+				document.getElementById('theme-icon').innerText = "☀️";
+			} else {
+				document.documentElement.classList.add('dark');
+				localStorage.setItem('theme', 'dark');
+				document.getElementById('theme-icon').innerText = "🌙";
+			}
+		}
+		function copyShareLink(groupId) {
+			const shareUrl = window.location.origin + "/share/" + groupId;
+			navigator.clipboard.writeText(shareUrl).then(() => {
+				alert("📋 Shareable group link copied to your clipboard:\n" + shareUrl);
+			});
+		}
+		function calculatePayerAutoSplits() {
+			const billInput = document.getElementById('form_total_amount');
+			if (!billInput) return;
+			const totalBill = Math.round(parseFloat(billInput.value) || 0);
+			const checkboxes = document.querySelectorAll('input[id^="payer_chk_"]');
+			let checkedPayerNames = [];
+			
+			checkboxes.forEach(chk => {
+				if(chk.checked) checkedPayerNames.push(chk.id.replace('payer_chk_', ''));
+				document.getElementById('payer_amt_' + chk.id.replace('payer_chk_', '')).value = "";
+			});
+			
+			if (checkedPayerNames.length === 0 || totalBill <= 0) return;
+			const baseShare = Math.floor(totalBill / checkedPayerNames.length);
+			const remainder = totalBill % checkedPayerNames.length;
+			
+			checkedPayerNames.forEach((name, index) => {
+				const finalPayerShare = baseShare + (index < remainder ? 1 : 0);
+				document.getElementById('payer_amt_' + name).value = "₹ " + finalPayerShare;
+			});
+		}
+		function runSplitUIEngine() {
+			const val = document.getElementById('form_split_type').value;
+			document.getElementById('sec_split_equal').classList.add('hidden');
+			document.getElementById('sec_split_unequal').classList.add('hidden');
+			document.getElementById('sec_split_percent').classList.add('hidden');
+
+			if (val === 'EQUAL') document.getElementById('sec_split_equal').classList.remove('hidden');
+			else if (val === 'UNEQUAL') document.getElementById('sec_split_unequal').classList.remove('hidden');
+			else if (val === 'PERCENT') document.getElementById('sec_split_percent').classList.remove('hidden');
+		}
+		function initiateExpenseEdit(exp) {
+			window.scrollTo({ top: 0, behavior: 'smooth' });
+			document.getElementById('form-title').innerText = "📝 Edit Expense";
+			document.getElementById('cancel-edit-btn').classList.remove('hidden');
+			document.getElementById('form_expense_id').value = exp.id;
+			document.getElementById('form_description').value = exp.description;
+			document.getElementById('form_total_amount').value = exp.total_amount;
+			document.getElementById('form_split_type').value = exp.split_type;
+			document.getElementById('form-submit-btn').innerText = "Update Expense";
+			{% for m in members %}
+				document.getElementById('payer_chk_{{ m.name }}').checked = false;
+				document.getElementById('payer_amt_{{ m.name }}').value = '';
+				document.getElementById('equal_share_chk_{{ m.name }}').checked = false;
+				document.getElementById('unequal_share_val_{{ m.name }}').value = '';
+				document.getElementById('pct_share_val_{{ m.name }}').value = '';
+			{% endfor %}
+			for (const [payer, amount] of Object.entries(exp.payers)) {
+				let chk = document.getElementById('payer_chk_' + payer);
+				if (chk) chk.checked = true;
+			}
+			calculatePayerAutoSplits();
+			if (exp.split_type === 'EQUAL') {
+				for (const member of Object.keys(exp.shares)) {
+					let chk = document.getElementById('equal_share_chk_' + member);
+					if (chk) chk.checked = true;
+				}
+			} else if (exp.split_type === 'UNEQUAL') {
+				for (const [member, val] of Object.entries(exp.shares)) {
+					let input = document.getElementById('unequal_share_val_' + member);
+					if (input) input.value = val;
+				}
+			} else if (exp.split_type === 'PERCENT') {
+				for (const [member, val] of Object.entries(exp.shares)) {
+					let input = document.getElementById('pct_share_val_' + member);
+					if (input) input.value = Math.round((val / exp.total_amount) * 100);
+				}
+			}
+			runSplitUIEngine();
+		}
+		function resetExpenseForm() {
+			document.getElementById('form-title').innerText = "2. Add New Expense";
+			document.getElementById('cancel-edit-btn').classList.add('hidden');
+			document.getElementById('expense-main-form').reset();
+			document.getElementById('form_expense_id').value = "";
+			document.getElementById('form-submit-btn').innerText = "Save Expense";
+			calculatePayerAutoSplits();
+			runSplitUIEngine();
+		}
+	</script>
+</body>
+</html>
