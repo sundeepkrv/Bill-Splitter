@@ -32,7 +32,7 @@
 	</header>
 
 	<main class="max-w-7xl w-full mx-auto my-auto p-6 grid grid-cols-1 md:grid-cols-4 gap-6 flex-grow">
-		<aside class="md:col-span-1 space-y-6 sticky top-28 max-h-[calc(100vh-24rem)]">
+		<aside class="md:col-span-1 space-y-6">
 			<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
 				<h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Create New Group</h3>
 				<form action="{{ url_for('add_group') }}" method="POST" class="space-y-2">
@@ -42,7 +42,7 @@
 			</div>
 			{% if groups %}
 			<div class="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-				<h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Your Groups</h3>
+				<h3 class="font-bold text-sm uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Your Group</h3>
 				<ul class="space-y-1">
 					{% for g in groups %}
 					<li>
